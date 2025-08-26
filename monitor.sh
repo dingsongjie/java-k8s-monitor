@@ -17,12 +17,22 @@ COOLDOWN=${5:-${COOLDOWN:-$COOLDOWN_DEFAULT}}
 
 echo "CPU_THRESHOLD=$CPU_THRESHOLD, CPU_DURATION=$CPU_DURATION, MEM_THRESHOLD=$MEM_THRESHOLD, PROFILER_DURATION=$PROFILER_DURATION, COOLDOWN=$COOLDOWN, STARTUP_GRACE_PERIOD=$STARTUP_GRACE_PERIOD"   
 
+# 安装 arthas lib
+echo '安装 arthas lib 开始..................'
+mkdir -p /arthas/lib/4.0.5 && \
+    curl -L https://repo1.maven.org/maven2/com/taobao/arthas/arthas-packaging/4.0.5/arthas-packaging-4.0.5-bin.zip \
+    -o /arthas/lib/4.0.5/arthas-packaging-4.0.5-bin.zip && \
+    unzip /arthas/lib/4.0.5/arthas-packaging-4.0.5-bin.zip -d /arthas/lib/4.0.5/arthas && \
+    rm /arthas/lib/4.0.5/arthas-packaging-4.0.5-bin.zip
+echo '安装 arthas lib 完成..................'
 
 CPU_COOLDOWN_FILE="/tmp/cpu_profiler_cooldown"
 MEM_COOLDOWN_FILE="/tmp/mem_dump_cooldown"
 
 # 获取 Arthas 执行命令路径
-ARTHAS_BIN="./as.sh"
+ARTHAS_BIN="./as.sh --arthas-home /arthas/lib/4.0.5/arthas"
+
+#--arthas-home /arthas/lib/4.0.5/arthas
 
 
 get_container_start_time() {
@@ -140,13 +150,13 @@ function cooldown_passed() {
 
 function start_profiler() {
   echo "$(date) CPU超过阈值，启动 Arthas profiler，持续${PROFILER_DURATION}s"
-  $ARTHAS_BIN -p $PID -c "profiler start --duration ${PROFILER_DURATION}s -f profile-$(date +%s).html cpu"
-  $ARTHAS_BIN -p $PID -c "profiler stop"
+  $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).html cpu"
+  echo "创建profiler成功"
   echo $(date +%s) > $CPU_COOLDOWN_FILE
 }
 
 function start_heap_dump() {
-  local dump_file="heapdump-$(date +%s).hprof"
+  local dump_file="/dumpfile/heapdump-$(date +%s).hprof"
   echo "$(date) 内存超过阈值，生成 heap dump: $dump_file"
   $ARTHAS_BIN -p $PID -c "dumpheap $dump_file"
   echo $(date +%s) > $MEM_COOLDOWN_FILE
@@ -211,6 +221,6 @@ while true; do
         fi
     else  
         echo "容器启动保护期内，跳过检测..."
-        sleep 1
+        sleep 10
     fi    
 done

@@ -12,7 +12,13 @@ FROM maven:3.9-eclipse-temurin-21-alpine
 RUN apk add --no-cache curl busybox-extras unzip
 
 WORKDIR /app
+
+RUN mkdir -p /root/.arthas/lib \
+ && wget -O /root/.arthas/lib/arthas-boot.jar https://arthas.aliyun.com/arthas-boot.jar
+
+
 RUN curl -L https://arthas.aliyun.com/install.sh | sh
+
 
 COPY monitor.sh monitor.sh
 RUN chmod +x monitor.sh
