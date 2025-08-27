@@ -162,7 +162,7 @@ function start_heap_dump() {
   echo "$(date) 内存超过阈值，生成 heap dump: $dump_file"
   $ARTHAS_BIN -p $PID -c "dumpheap $dump_file"
 
-  $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/dump-profile-$(date +%s).jfr --event cpu,alloc"
+  $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/memory-profile-$(date +%s).jfr --event cpu,alloc"
   echo "创建profiler成功"
   echo $(date +%s) > $MEM_COOLDOWN_FILE
 }
