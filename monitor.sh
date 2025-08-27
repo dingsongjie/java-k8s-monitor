@@ -153,7 +153,8 @@ function start_profiler() {
   echo "$(date) CPU超过阈值，启动 Arthas profiler，持续${PROFILER_DURATION}s"
   # $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).html --event cpu"
   # sleep 10
-  local cmd="$ARTHAS_BIN  $pid -c \"profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).jfr --event cpu,alloc,lock,wall\""
+  local timestamp=$(date +"%Y-%m-%d_%H-%M")
+  local cmd="$ARTHAS_BIN  $pid -c \"profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-${timestamp}.jfr --event cpu,alloc,lock,wall\""
   echo "执行 profiler 命令: $cmd"
   eval $cmd
   echo "创建profiler成功"
@@ -162,11 +163,12 @@ function start_profiler() {
 
 function start_heap_dump() {
   local pid=$1
-  local dump_file="/dumpfile/heapdump-$(date +%s).hprof"
+  local timestamp=$(date +"%Y-%m-%d_%H-%M")
+  local dump_file="/dumpfile/heapdump-${timestamp}.hprof"
   echo "$(date) 内存超过阈值，生成 heap dump: $dump_file"
   $ARTHAS_BIN -p $pid -c "dumpheap $dump_file"
 
-  $ARTHAS_BIN  $pid -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/memory-profile-$(date +%s).jfr --event cpu,alloc"
+  $ARTHAS_BIN  $pid -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/memory-profile-${timestamp}.jfr --event cpu,alloc"
   echo "创建profiler成功"
   echo $(date +%s) > $MEM_COOLDOWN_FILE
 }
