@@ -150,7 +150,9 @@ function cooldown_passed() {
 
 function start_profiler() {
   echo "$(date) CPU超过阈值，启动 Arthas profiler，持续${PROFILER_DURATION}s"
-  $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).html cpu"
+  $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).html --event cpu"
+  sleep 10
+  $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).jfr --event cpu,alloc,lock,wall"
   echo "创建profiler成功"
   echo $(date +%s) > $CPU_COOLDOWN_FILE
 }
@@ -159,6 +161,9 @@ function start_heap_dump() {
   local dump_file="/dumpfile/heapdump-$(date +%s).hprof"
   echo "$(date) 内存超过阈值，生成 heap dump: $dump_file"
   $ARTHAS_BIN -p $PID -c "dumpheap $dump_file"
+
+  $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/dump-profile-$(date +%s).jfr --event cpu,alloc"
+  echo "创建profiler成功"
   echo $(date +%s) > $MEM_COOLDOWN_FILE
 }
 
