@@ -149,20 +149,24 @@ function cooldown_passed() {
 }
 
 function start_profiler() {
+  local pid=$1
   echo "$(date) CPU超过阈值，启动 Arthas profiler，持续${PROFILER_DURATION}s"
-  $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).html --event cpu"
-  sleep 10
-  $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).jfr --event cpu,alloc,lock,wall"
+  # $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).html --event cpu"
+  # sleep 10
+  local cmd="$ARTHAS_BIN  $pid -c \"profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).jfr --event cpu,alloc,lock,wall\""
+  echo "执行 profiler 命令: $cmd"
+  eval $cmd
   echo "创建profiler成功"
   echo $(date +%s) > $CPU_COOLDOWN_FILE
 }
 
 function start_heap_dump() {
+  local pid=$1
   local dump_file="/dumpfile/heapdump-$(date +%s).hprof"
   echo "$(date) 内存超过阈值，生成 heap dump: $dump_file"
-  $ARTHAS_BIN -p $PID -c "dumpheap $dump_file"
+  $ARTHAS_BIN -p $pid -c "dumpheap $dump_file"
 
-  $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/memory-profile-$(date +%s).jfr --event cpu,alloc"
+  $ARTHAS_BIN  $pid -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/memory-profile-$(date +%s).jfr --event cpu,alloc"
   echo "创建profiler成功"
   echo $(date +%s) > $MEM_COOLDOWN_FILE
 }
@@ -218,14 +222,14 @@ while true; do
  
     if (( elapsed >= STARTUP_GRACE_PERIOD )); then
         if cooldown_passed $CPU_COOLDOWN_FILE && check_cpu "$pid"; then
-            start_profiler
+            start_profiler "$pid"
         fi
 
         if cooldown_passed $MEM_COOLDOWN_FILE && check_mem "$pid"; then
-            start_heap_dump
+            start_heap_dump "$pid"
         fi
     else  
         echo "容器启动保护期内，跳过检测..."
-        sleep 10
+        sleep 3
     fi    
 done
