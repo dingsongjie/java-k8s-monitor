@@ -3,7 +3,7 @@
 # ========== 默认参数 ==========
 CPU_THRESHOLD_DEFAULT=65        # CPU 超过 65% (mbean 返回 0~1)
 CPU_DURATION_DEFAULT=5            # 持续秒数
-MEM_THRESHOLD_DEFAULT=95        # 内存超过 95%
+MEM_THRESHOLD_DEFAULT=90        # 内存超过 95%
 PROFILER_DURATION_DEFAULT=10      # profiler 持续秒数
 COOLDOWN_DEFAULT=900              # 冷却时间（秒），15 分钟
 STARTUP_GRACE_PERIOD=120     #开始运行的等待时间，等待主容器运行2分钟后再进行
