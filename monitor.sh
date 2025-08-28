@@ -214,7 +214,7 @@ while true; do
     pid=$(pgrep -f java | head -n 1)
     if [ -z "$pid" ]; then
         echo "未找到 java 进程,主容器可能重启了，等待容器启动"
-        sleep 3
+        sleep 10
     fi
     container_start_time=$(get_container_start_time "$pid")
     current_time=$(date +%s)
