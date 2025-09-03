@@ -26,11 +26,15 @@ mkdir -p /arthas/lib/4.0.5 && \
     rm /arthas/lib/4.0.5/arthas-packaging-4.0.5-bin.zip
 echo '安装 arthas lib 完成..................'
 
+
+
 CPU_COOLDOWN_FILE="/tmp/cpu_profiler_cooldown"
 MEM_COOLDOWN_FILE="/tmp/mem_dump_cooldown"
 
 # 获取 Arthas 执行命令路径
 ARTHAS_BIN="./as.sh --arthas-home /arthas/lib/4.0.5/arthas"
+
+ASYNC_PROFILER_BIN="/app/bin/asprof"
 
 #--arthas-home /arthas/lib/4.0.5/arthas
 
@@ -144,6 +148,7 @@ function cooldown_passed() {
   if (( diff >= COOLDOWN )); then
     return 0
   else
+    sleep 1
     return 1
   fi
 }
@@ -154,7 +159,9 @@ function start_profiler() {
   # $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).html --event cpu"
   # sleep 10
   local timestamp=$(date +"%Y-%m-%d_%H-%M")
-  local cmd="$ARTHAS_BIN  $pid -c \"profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-${timestamp}.jfr --event cpu,alloc,lock,wall\""
+  # local cmd="$ARTHAS_BIN  $pid -c \"profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-${timestamp}.jfr --event cpu,alloc,lock,wall\""
+
+  local cmd="$ASYNC_PROFILER_BIN -d ${PROFILER_DURATION} -f /dumpfile/flamegraph-${timestamp}.html $pid "
   echo "执行 profiler 命令: $cmd"
   eval $cmd
   echo "创建profiler成功"
