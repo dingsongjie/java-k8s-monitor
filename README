@@ -1,0 +1,96 @@
+# Monitor使用
+
+内置arthas，并且支持在cpu超过65%以上持续5秒和内存超过90自动抓取jfr和hprof文件
+
+
+## 部署
+
+### 一、共享ProcessNamespace
+pod配置中添加
+```yaml
+shareProcessNamespace: true
+```
+
+### 二、挂载
+
+1) aysnc-profiler安装目录,dump目录,arthas-lib目录,cgroup目录
+```yaml
+      volumes:
+      - name: async-profiler  
+        emptyDir: {}
+      - name: arthas-lib
+        emptyDir: {}        
+      - name: dump-volume
+        persistentVolumeClaim:
+          claimName: sample-pv
+      - name: cgroup
+        hostPath:
+          path: /sys/fs/cgroup
+          type: Directory
+                          
+```
+2) 主容器挂载目录
+```yaml
+        volumeMounts:
+        - mountPath: /arthas
+          name: arthas-lib
+        - mountPath: /dumpfile
+          name: dump-volume
+          subPath: <serviceName>
+        - mountPath: /async-profiler
+          name: async-profiler
+```
+### 三、添加init容器
+```yaml
+      initContainers:
+      - args:
+        - |
+          cp /app/async-profiler / -r
+          chmod +x /async-profiler/bin/asprof
+          chmod +x /async-profiler/bin/jfrconv
+        command:
+        - sh
+        - -c
+        image: java-k8s-monitor:v1
+        imagePullPolicy: Always
+        name: async-profiler-init
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /async-profiler
+          name: async-profiler
+```
+
+
+### 四、添加sidecar
+```yaml
+      - name: monitor
+        image: java-k8s-monitor:v1
+        imagePullPolicy: Always        
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /cgroup_sidecar
+          name: cgroup
+          readOnly: true
+        - mountPath: /arthas
+          name: arthas-lib
+        - mountPath: /async-profiler
+          name: async-profiler
+        - mountPath: /dumpfile
+          name: dump-volume          
+```
