@@ -3,7 +3,7 @@
 # ========== 默认参数 ==========
 CPU_THRESHOLD_DEFAULT=65        # CPU 超过 65% (mbean 返回 0~1)
 CPU_DURATION_DEFAULT=5            # 持续秒数
-MEM_THRESHOLD_DEFAULT=90        # 内存超过 95%
+MEM_THRESHOLD_DEFAULT=90        # 内存超过 90%
 PROFILER_DURATION_DEFAULT=10      # profiler 持续秒数
 COOLDOWN_DEFAULT=900              # 冷却时间（秒），15 分钟
 STARTUP_GRACE_PERIOD=120     #开始运行的等待时间，等待主容器运行2分钟后再进行
@@ -204,6 +204,9 @@ function check_cpu() {
 function check_mem() {
   local pid=$1
   local mem_load=$(get_process_memory_percent "$pid" 1)
+
+  echo $mem_load
+
   mem_load=${mem_load:-0}
   mem_int=$(awk "BEGIN {print int($mem_load)}")
   threshold_int=$(awk "BEGIN {print int($MEM_THRESHOLD)}")
