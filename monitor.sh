@@ -36,6 +36,8 @@ ARTHAS_BIN="./as.sh --arthas-home /arthas/lib/4.0.5/arthas"
 
 ASYNC_PROFILER_BIN="/async-profiler/bin/asprof"
 
+JMAP_BIN="jmap"
+
 #--arthas-home /arthas/lib/4.0.5/arthas
 
 
@@ -173,9 +175,7 @@ function start_heap_dump() {
   local timestamp=$(date +"%Y-%m-%d_%H-%M")
   local dump_file="/dumpfile/heapdump-${timestamp}.hprof"
   echo "$(date) 内存超过阈值，生成 heap dump: $dump_file"
-  $ARTHAS_BIN -p $pid -c "dumpheap $dump_file"
-
-  $ARTHAS_BIN  $pid -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/memory-profile-${timestamp}.jfr --event cpu,alloc"
+  $JMAP_BIN -dump:format=b,file="$dump_file" $pid
   echo "创建profiler成功"
   echo $(date +%s) > $MEM_COOLDOWN_FILE
 }
