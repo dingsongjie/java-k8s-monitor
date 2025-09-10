@@ -185,6 +185,7 @@ function check_cpu() {
   local count=0
   for ((i=0; i<CPU_DURATION; i++)); do
     local cpu_load=$(get_process_cpu_percent "$pid")
+    echo "cpu使用:$cpu_load%"
     cpu_load=${cpu_load:-0}
     # echo "CPU load: $cpu_load"
     # 乘100方便对比
@@ -205,7 +206,7 @@ function check_mem() {
   local pid=$1
   local mem_load=$(get_process_memory_percent "$pid" 1)
 
-  echo $mem_load
+  echo "内存使用:$mem_load%"
 
   mem_load=${mem_load:-0}
   mem_int=$(awk "BEGIN {print int($mem_load)}")
