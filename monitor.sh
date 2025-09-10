@@ -34,7 +34,7 @@ MEM_COOLDOWN_FILE="/tmp/mem_dump_cooldown"
 # 获取 Arthas 执行命令路径
 ARTHAS_BIN="./as.sh --arthas-home /arthas/lib/4.0.5/arthas"
 
-ASYNC_PROFILER_BIN="/app/bin/asprof"
+ASYNC_PROFILER_BIN="/async-profiler/bin/asprof"
 
 #--arthas-home /arthas/lib/4.0.5/arthas
 
@@ -161,7 +161,7 @@ function start_profiler() {
   local timestamp=$(date +"%Y-%m-%d_%H-%M")
   # local cmd="$ARTHAS_BIN  $pid -c \"profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-${timestamp}.jfr --event cpu,alloc,lock,wall\""
 
-  local cmd="$ASYNC_PROFILER_BIN -d ${PROFILER_DURATION} -f /dumpfile/flamegraph-${timestamp}.html $pid "
+  local cmd="$ASYNC_PROFILER_BIN --all -d ${PROFILER_DURATION} -f /dumpfile/flamegraph-${timestamp}.jfr $pid "
   echo "执行 profiler 命令: $cmd"
   eval $cmd
   echo "创建profiler成功"
@@ -181,7 +181,7 @@ function start_heap_dump() {
 }
 
 function check_cpu() {
-  local pid=$1  
+  local pid=$1
   local count=0
   for ((i=0; i<CPU_DURATION; i++)); do
     local cpu_load=$(get_process_cpu_percent "$pid")
@@ -226,9 +226,9 @@ while true; do
     container_start_time=$(get_container_start_time "$pid")
     current_time=$(date +%s)
     echo "current_time=$current_time"
-    elapsed=$((current_time - container_start_time))    
+    elapsed=$((current_time - container_start_time))
     echo "Monitoring Java process PID: $pid"
- 
+
     if (( elapsed >= STARTUP_GRACE_PERIOD )); then
         if cooldown_passed $CPU_COOLDOWN_FILE && check_cpu "$pid"; then
             start_profiler "$pid"
@@ -237,8 +237,8 @@ while true; do
         if cooldown_passed $MEM_COOLDOWN_FILE && check_mem "$pid"; then
             start_heap_dump "$pid"
         fi
-    else  
+    else
         echo "容器启动保护期内，跳过检测..."
         sleep 3
-    fi    
+    fi
 done
