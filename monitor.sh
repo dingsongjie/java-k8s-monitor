@@ -61,12 +61,17 @@ get_process_memory_percent() {
     # 判断 cgroup 版本并读取内存使用/限制
     if [ -f "$FULL_PATH/memory.usage_in_bytes" ]; then
       # cgroup v1
-      MEM_USAGE=$(cat "$FULL_PATH/memory.usage_in_bytes")
+      USAGE_BYTES=$(cat "$FULL_PATH/memory.usage_in_bytes")
+      INACTIVE_FILE=$(grep -w total_inactive_file "$FULL_PATH/memory.stat" | awk '{print $2}')      
+      MEM_USAGE=$((USAGE_BYTES - INACTIVE_FILE))
       MEM_LIMIT=$(cat "$FULL_PATH/memory.limit_in_bytes")
     elif [ -f "$FULL_PATH/memory.current" ]; then
       # cgroup v2
-      MEM_USAGE=$(cat "$FULL_PATH/memory.current")
+      USAGE_BYTES=$(cat "$FULL_PATH/memory.current")
+      INACTIVE_FILE=$(grep -w inactive_file "$FULL_PATH/memory.stat" | awk '{print $2}')
+      MEM_USAGE=$((USAGE_BYTES - INACTIVE_FILE))
       MEM_LIMIT=$(cat "$FULL_PATH/memory.max")
+      [ "$MEM_LIMIT" = "max" ] && MEM_LIMIT=0  # 如果无限制，设置为0
     else
       echo "Error: Cannot find memory stats for PID $pid"
       exit 1
