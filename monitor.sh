@@ -17,14 +17,7 @@ COOLDOWN=${5:-${COOLDOWN:-$COOLDOWN_DEFAULT}}
 
 echo "CPU_THRESHOLD=$CPU_THRESHOLD, CPU_DURATION=$CPU_DURATION, MEM_THRESHOLD=$MEM_THRESHOLD, PROFILER_DURATION=$PROFILER_DURATION, COOLDOWN=$COOLDOWN, STARTUP_GRACE_PERIOD=$STARTUP_GRACE_PERIOD"   
 
-# 安装 arthas lib
-echo '安装 arthas lib 开始..................'
-mkdir -p /arthas/lib/4.0.5 && \
-    curl -L https://repo1.maven.org/maven2/com/taobao/arthas/arthas-packaging/4.0.5/arthas-packaging-4.0.5-bin.zip \
-    -o /arthas/lib/4.0.5/arthas-packaging-4.0.5-bin.zip && \
-    unzip /arthas/lib/4.0.5/arthas-packaging-4.0.5-bin.zip -d /arthas/lib/4.0.5/arthas && \
-    rm /arthas/lib/4.0.5/arthas-packaging-4.0.5-bin.zip
-echo '安装 arthas lib 完成..................'
+
 
 
 
