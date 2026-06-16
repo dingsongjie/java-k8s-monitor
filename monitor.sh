@@ -15,7 +15,18 @@ MEM_THRESHOLD=${3:-${MEM_THRESHOLD:-$MEM_THRESHOLD_DEFAULT}}
 PROFILER_DURATION=${4:-${PROFILER_DURATION:-$PROFILER_DURATION_DEFAULT}}
 COOLDOWN=${5:-${COOLDOWN:-$COOLDOWN_DEFAULT}}
 
-echo "CPU_THRESHOLD=$CPU_THRESHOLD, CPU_DURATION=$CPU_DURATION, MEM_THRESHOLD=$MEM_THRESHOLD, PROFILER_DURATION=$PROFILER_DURATION, COOLDOWN=$COOLDOWN, STARTUP_GRACE_PERIOD=$STARTUP_GRACE_PERIOD"   
+# ========== 新增：Tunnel Server 自动注册配置 ==========
+# 在 deployment.yaml 里通过 env 注入,POD_NAME 用 Downward API
+TUNNEL_SERVER="${TUNNEL_SERVER:-ws://arthas-tunnel.monitoring.svc.cluster.local:7777/ws}"
+APP_NAME="${APP_NAME:-unknown-app}"
+INSTANCE_ID="${POD_NAME:-$(hostname)}"
+ARTHAS_JAR="${ARTHAS_JAR:-/arthas/lib/4.0.5/arthas/arthas-boot.jar}"
+ATTACHED_PID_FILE="/tmp/arthas_attached_pid"        # 记录已 attach 的 PID,避免重复 attach
+ATTACH_COOLDOWN_FILE="/tmp/arthas_attach_cooldown"  # attach 失败后的冷却时间戳
+ATTACH_COOLDOWN_SECONDS=60                           # 失败后 60 秒再重试
+
+echo "CPU_THRESHOLD=$CPU_THRESHOLD, CPU_DURATION=$CPU_DURATION, MEM_THRESHOLD=$MEM_THRESHOLD, PROFILER_DURATION=$PROFILER_DURATION, COOLDOWN=$COOLDOWN, STARTUP_GRACE_PERIOD=$STARTUP_GRACE_PERIOD"
+echo "TUNNEL_SERVER=$TUNNEL_SERVER, APP_NAME=$APP_NAME, INSTANCE_ID=$INSTANCE_ID"
 
 CPU_COOLDOWN_FILE="/tmp/cpu_profiler_cooldown"
 MEM_COOLDOWN_FILE="/tmp/mem_dump_cooldown"
@@ -152,11 +163,7 @@ function cooldown_passed() {
 function start_profiler() {
   local pid=$1
   echo "$(date) CPU超过阈值，启动 Arthas profiler，持续${PROFILER_DURATION}s"
-  # $ARTHAS_BIN  $PID -c "profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-$(date +%s).html --event cpu"
-  # sleep 10
   local timestamp=$(date +"%Y-%m-%d_%H-%M")
-  # local cmd="$ARTHAS_BIN  $pid -c \"profiler start --duration ${PROFILER_DURATION} -f /dumpfile/profile-${timestamp}.jfr --event cpu,alloc,lock,wall\""
-
   local cmd="$ASYNC_PROFILER_BIN --all -d ${PROFILER_DURATION} -f /dumpfile/flamegraph-${timestamp}.jfr $pid "
   echo "执行 profiler 命令: $cmd"
   eval $cmd
@@ -181,8 +188,6 @@ function check_cpu() {
     local cpu_load=$(get_process_cpu_percent "$pid")
     echo "cpu使用:$cpu_load%"
     cpu_load=${cpu_load:-0}
-    # echo "CPU load: $cpu_load"
-    # 乘100方便对比
     cpu_int=$(awk "BEGIN {print int($cpu_load)}")
     threshold_int=$(awk "BEGIN {print int($CPU_THRESHOLD)}")
     if (( cpu_int >= threshold_int )); then
@@ -205,12 +210,52 @@ function check_mem() {
   mem_load=${mem_load:-0}
   mem_int=$(awk "BEGIN {print int($mem_load)}")
   threshold_int=$(awk "BEGIN {print int($MEM_THRESHOLD)}")
-  # echo "Heap Usage: $mem_load"
   if (( mem_int >= threshold_int )); then
     return 0
   else
     return 1
   fi
+}
+
+# ========== 新增：arthas 自动 attach + 连 tunnel ==========
+# arthas agent 一旦 attach 到主 JVM,就在主 JVM 里常驻 (含 tunnel client),
+# sidecar 里的 arthas-boot 进程会因 stdin EOF 退出,但不影响 agent 运行。
+# tunnel client 自带 5 秒重连机制 (TunnelClientSocketClientHandler.channelUnregistered)。
+maybe_attach_arthas() {
+    local pid=$1
+
+    # 同一 PID 已 attach 过,跳过 (agent 在主 JVM 里持续运行,不会因为 sidecar 重启而消失)
+    if [[ -f "$ATTACHED_PID_FILE" ]] && [[ "$(cat $ATTACHED_PID_FILE)" == "$pid" ]]; then
+        return 0
+    fi
+
+    # attach 失败后的冷却,避免每次主循环都重试刷屏
+    if [[ -f "$ATTACH_COOLDOWN_FILE" ]]; then
+        local last=$(cat "$ATTACH_COOLDOWN_FILE")
+        local now=$(date +%s)
+        if (( now - last < ATTACH_COOLDOWN_SECONDS )); then
+            return 1
+        fi
+    fi
+
+    echo "$(date) [arthas] Attaching to PID $pid, app=$APP_NAME, instance=$INSTANCE_ID, tunnel=$TUNNEL_SERVER"
+    # < /dev/null:让 arthas-boot attach 后 stdin 立即 EOF,它退出但 agent 保留在目标 JVM 里
+    # --telnet-port 0 / --http-port 0:随机端口,避免和主应用或其他 sidecar 冲突
+    # --agent-id "${APP_NAME}@${INSTANCE_ID}":fork 版 tunnel server 按 @ 拆应用/实例,必须这个格式
+    if java -jar "$ARTHAS_JAR" \
+        --tunnel-server "$TUNNEL_SERVER" \
+        --app-name "$APP_NAME" \
+        --agent-id "${APP_NAME}@${INSTANCE_ID}" \
+        --telnet-port 0 \
+        --http-port 0 \
+        --height 100 --width 200 \
+        "$pid" < /dev/null >> /tmp/arthas-attach.log 2>&1; then
+        echo "$pid" > "$ATTACHED_PID_FILE"
+        echo "$(date) [arthas] Attached, agent running in JVM $pid (tunnel client 自动重连)"
+    else
+        echo $(date +%s) > "$ATTACH_COOLDOWN_FILE"
+        echo "$(date) [arthas] Attach failed (see /tmp/arthas-attach.log),retry in ${ATTACH_COOLDOWN_SECONDS}s"
+    fi
 }
 
 while true; do
@@ -219,13 +264,19 @@ while true; do
     pid=$(pgrep -f java | head -n 1)
     if [ -z "$pid" ]; then
         echo "未找到 java 进程,主容器可能重启了，等待容器启动"
+        rm -f "$ATTACHED_PID_FILE"   # 清标记,新 JVM 起来后重新 attach
         sleep 10
+        continue
     fi
     container_start_time=$(get_container_start_time "$pid")
     current_time=$(date +%s)
     echo "current_time=$current_time"
     elapsed=$((current_time - container_start_time))
     echo "Monitoring Java process PID: $pid"
+
+    # 在 grace period 内就尝试 attach arthas (JVM 已经起来,attach 不影响业务)
+    # 不阻塞监控:attach 成功一次后,后续循环都直接 return 0
+    maybe_attach_arthas "$pid"
 
     if (( elapsed >= STARTUP_GRACE_PERIOD )); then
         if cooldown_passed $CPU_COOLDOWN_FILE && check_cpu "$pid"; then
