@@ -20,7 +20,7 @@ COOLDOWN=${5:-${COOLDOWN:-$COOLDOWN_DEFAULT}}
 TUNNEL_SERVER="${TUNNEL_SERVER:-ws://arthas-tunnel.monitoring.svc.cluster.local:7777/ws}"
 APP_NAME="${APP_NAME:-unknown-app}"
 INSTANCE_ID="${POD_NAME:-$(hostname)}"
-ARTHAS_JAR="${ARTHAS_JAR:-/arthas/lib/4.0.5/arthas/arthas-boot.jar}"
+ARTHAS_JAR="${ARTHAS_JAR:-/arthas/lib/4.0.5/arthas-boot.jar}"
 ATTACHED_PID_FILE="/tmp/arthas_attached_pid"        # 记录已 attach 的 PID,避免重复 attach
 ATTACH_COOLDOWN_FILE="/tmp/arthas_attach_cooldown"  # attach 失败后的冷却时间戳
 ATTACH_COOLDOWN_SECONDS=60                           # 失败后 60 秒再重试
@@ -32,13 +32,13 @@ CPU_COOLDOWN_FILE="/tmp/cpu_profiler_cooldown"
 MEM_COOLDOWN_FILE="/tmp/mem_dump_cooldown"
 
 # 获取 Arthas 执行命令路径
-ARTHAS_BIN="./as.sh --arthas-home /arthas/lib/4.0.5/arthas"
+ARTHAS_BIN="./as.sh --arthas-home /arthas/lib/4.0.5"
 
 ASYNC_PROFILER_BIN="/async-profiler/bin/asprof"
 
 JMAP_BIN="jmap"
 
-#--arthas-home /arthas/lib/4.0.5/arthas
+#--arthas-home /arthas/lib/4.0.5
 
 
 get_container_start_time() {
@@ -242,14 +242,17 @@ maybe_attach_arthas() {
     # < /dev/null:让 arthas-boot attach 后 stdin 立即 EOF,它退出但 agent 保留在目标 JVM 里
     # --telnet-port 0 / --http-port 0:随机端口,避免和主应用或其他 sidecar 冲突
     # --agent-id "${APP_NAME}@${INSTANCE_ID}":fork 版 tunnel server 按 @ 拆应用/实例,必须这个格式
-    if java -jar "$ARTHAS_JAR" \
+    : > /tmp/arthas-attach.log
+    java -jar "$ARTHAS_JAR" \
         --tunnel-server "$TUNNEL_SERVER" \
         --app-name "$APP_NAME" \
         --agent-id "${APP_NAME}@${INSTANCE_ID}" \
         --telnet-port 0 \
         --http-port 0 \
         --height 100 --width 200 \
-        "$pid" < /dev/null >> /tmp/arthas-attach.log 2>&1; then
+        "$pid" < /dev/null >> /tmp/arthas-attach.log 2>&1
+    # 不用退出码判断:--telnet-port 0 时 arthas-boot 的交互 client 连不上会返回非零,但 agent 实际已 attach 成功
+    if grep -q "Attach process $pid success" /tmp/arthas-attach.log; then
         echo "$pid" > "$ATTACHED_PID_FILE"
         echo "$(date) [arthas] Attached, agent running in JVM $pid (tunnel client 自动重连)"
     else
